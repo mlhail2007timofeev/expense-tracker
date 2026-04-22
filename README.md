@@ -10,8 +10,8 @@ class WeatherDiary:
         self.root = root
         self.root.title("Weather Diary - Дневник погоды")
         self.weather_records = []
-        self.load_data()
         self.create_widgets()
+        self.load_data()  # Вызываем после создания виджетов
 
     def create_widgets(self):
         # Поля ввода
@@ -78,13 +78,19 @@ class WeatherDiary:
                 raise ValueError("Поле 'Температура' не может быть пустым")
             temperature = float(temp_str)
 
+            # Дополнительная валидация температуры (разумный диапазон)
+            if temperature < -100 or temperature > 100:
+                raise ValueError("Температура должна быть в диапазоне от -100 до +100°C")
+
             # Валидация описания
             description = self.desc_entry.get().strip()
             if not description:
                 raise ValueError("Поле 'Описание погоды' не может быть пустым")
 
-            # Осадки
+            # Валидация осадков
             precipitation = self.precip_var.get()
+            if precipitation not in ["Да", "Нет"]:
+                raise ValueError("Некорректное значение для осадков")
 
             # Добавляем в список
             record = {
@@ -110,6 +116,7 @@ class WeatherDiary:
             self.save_data()
             messagebox.showinfo("Успех", "Запись о погоде успешно добавлена!")
 
+
         except ValueError as e:
             messagebox.showerror("Ошибка ввода", str(e))
         except Exception as e:
@@ -126,18 +133,17 @@ class WeatherDiary:
                     self.weather_records = json.load(f)
                     # Заполняем таблицу при загрузке
                     for record in self.weather_records:
-                        self.tree.insert(
-                            "", "end",
-                values=(
-                    record["date"],
-            f"{record['temperature']}°C",
-            record["description"],
-            record["precipitation"]
+                self.tree.insert(
+                    "", "end",
+            values=(
+                record["date"],
+                f"{record['temperature']}°C",
+                record["description"],
+                record["precipitation"]
+            )
         )
-    )
-            except (json.JSONDecodeError, IOError):
-                messagebox.showwarning("Предупреждение", "Не удалось загрузить данные из файла weather_records.json")
-                self.weather_records = []
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Предупреждение: не удалось загрузить данные из файла weather_records.json: {e}")
         else:
             self.weather_records = []
 
@@ -161,17 +167,4 @@ class WeatherDiary:
 
         # Обновляем таблицу
         for item in self.tree.get_children():
-            self.tree.delete(item)
-        for record in filtered:
-            self.tree.insert(
-                "", "end",
-                values=(
-                    record["date"],
-                    f"{record['temperature']}°C",
-                    record["description"],
-                    record["precipitation"]
-                )
-            )
-
-    def reset_filter(self):
-        #
+            self

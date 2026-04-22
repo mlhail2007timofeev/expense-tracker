@@ -57,7 +57,6 @@ class WeatherDiary:
         tk.Button(self.root, text="Применить фильтр", command=self.apply_filter).grid(
             row=8, column=0, columnspan=2, pady=10
         )
-
         tk.Button(self.root, text="Сбросить фильтр", command=self.reset_filter).grid(
             row=9, column=0, columnspan=2, pady=5
         )
@@ -170,4 +169,9 @@ class WeatherDiary:
                     record["date"],
                     f"{record['temperature']}°C",
                     record["description"],
-                    record["
+                    record["precipitation"]
+                )
+            )
+
+    def reset_filter(self):
+        #

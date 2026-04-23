@@ -1,174 +1,133 @@
 # expense-tracker
 import tkinter as tk
 from tkinter import ttk, messagebox
+import requests
 import json
-from datetime import datetime
 import os
 
-class WeatherDiary:
+class GitHubUserFinder:
     def __init__(self, root):
         self.root = root
-        self.root.title("Weather Diary - Дневник погоды")
-        self.records = []
-        self.create_widgets()
-        # Загружаем данные после создания всех виджетов
-        self.load_data()
+        self.root.title("GitHub User Finder")
+        self.favorites = []
+        self.load_favorites()
 
-    def create_widgets(self):
-        # Форма ввода
-        input_frame = tk.Frame(self.root)
-        input_frame.pack(pady=10, padx=10, fill="x")
+        # Поле поиска
+        tk.Label(root, text="Имя пользователя GitHub:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
+        self.search_entry = tk.Entry(root, width=40)
+        self.search_entry.grid(row=0, column=1, padx=10, pady=5)
 
-        # Дата
-        tk.Label(input_frame, text="Дата (ГГГГ-ММ-ДД):").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.date_entry = tk.Entry(input_frame, width=20)
-        self.date_entry.grid(row=0, column=1, padx=5, pady=5)
+        # Кнопка поиска
+        tk.Button(root, text="Найти пользователя", command=self.search_user).grid(row=0, column=2, padx=5, pady=5)
 
-        # Температура
-        tk.Label(input_frame, text="Температура (°C):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.temp_entry = tk.Entry(input_frame, width=20)
-        self.temp_entry.grid(row=1, column=1, padx=5, pady=5)
+        # Результаты поиска
+        tk.Label(root, text="Результаты поиска:").grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        self.results_tree = ttk.Treeview(root, columns=("Username", "Name", "Public Repos"), show="headings", height=10)
+        self.results_tree.heading("Username", text="Пользователь")
+        self.results_tree.heading("Name", text="Имя")
+        self.results_tree.heading("Public Repos", text="Публичных репозиториев")
+        self.results_tree.column("Username", width=150)
+        self.results_tree.column("Name", width=200)
+        self.results_tree.column("Public Repos", width=120)
+        self.results_tree.grid(row=2, column=0, columnspan=3, padx=10, pady=5, sticky="nsew")
 
-        # Описание погоды
-        tk.Label(input_frame, text="Описание погоды:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
-        self.desc_entry = tk.Entry(input_frame, width=20)
-        self.desc_entry.grid(row=2, column=1, padx=5, pady=5)
+        # Кнопки для избранного
+        tk.Button(root, text="Добавить в избранное", command=self.add_to_favorites).grid(row=3, column=0, padx=10, pady=10)
 
-        # Осадки
-        tk.Label(input_frame, text="Осадки:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
-        self.rain_var = tk.StringVar(value="Нет")
-        tk.Radiobutton(input_frame, text="Да", variable=self.rain_var, value="Да").grid(row=3, column=1, sticky="w")
-        tk.Radiobutton(input_frame, text="Нет", variable=self.rain_var, value="Нет").grid(row=3, column=2, sticky="w")
+        # Список избранного
+        tk.Label(root, text="Избранное:").grid(row=4, column=0, sticky="w", padx=10, pady=5)
+        self.favorites_tree = ttk.Treeview(root, columns=("Username", "Name"), show="headings", height=5)
+        self.favorites_tree.heading("Username", text="Пользователь")
+        self.favorites_tree.heading("Name", text="Имя")
+        self.favorites_tree.column("Username", width=250)
+        self.favorites_tree.column("Name", width=300)
+        self.favorites_tree.grid(row=5, column=0, columnspan=3, padx=10, pady=5, sticky="nsew")
 
-        # Кнопка добавления
-        tk.Button(input_frame, text="Добавить запись", command=self.add_record).grid(
-            row=4, column=0, columnspan=3, pady=10
-        )
+        # Кнопки сохранения/загрузки
+        tk.Button(root, text="Сохранить избранное", command=self.save_favorites).grid(row=6, column=0, padx=10, pady=5)
+        tk.Button(root, text="Загрузить избранное", command=self.load_favorites).grid(row=6, column=1, pady=5)
 
-        # Таблица записей
-        table_frame = tk.Frame(self.root)
-        table_frame.pack(pady=10, padx=10, fill="both", expand=True)
+        self.update_favorites_table()
 
-        columns = ("Дата", "Температура (°C)", "Описание", "Осадки")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
-        for col in columns:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=120)
-        self.tree.pack(fill="both", expand=True)
+    def validate_input(self):
+        username = self.search_entry.get().strip()
+        if not username:
+            messagebox.showerror("Ошибка", "Поле поиска не должно быть пустым!")
+            return False
+        return True
 
-        # Фильтрация
-        filter_frame = tk.Frame(self.root)
-        filter_frame.pack(pady=10, padx=10, fill="x")
+    def search_user(self):
+        if not self.validate_input():
+            return
 
-        tk.Label(filter_frame, text="Фильтр по дате:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.filter_date = tk.Entry(filter_frame, width=20)
-        self.filter_date.grid(row=0, column=1, padx=5, pady=5)
+        username = self.search_entry.get().strip()
 
-        tk.Label(filter_frame, text="Температура выше (°C):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.filter_temp = tk.Entry(filter_frame, width=20)
-        self.filter_temp.grid(row=1, column=1, padx=5, pady=5)
-
-        tk.Button(filter_frame, text="Применить фильтр", command=self.apply_filter).grid(row=2, column=0, pady=5)
-        tk.Button(filter_frame, text="Сбросить фильтр", command=self.reset_filter).grid(row=2, column=1, pady=5)
-
-    def add_record(self):
         try:
-            # Валидация даты
-            date_str = self.date_entry.get().strip()
-            if not date_str:
-                raise ValueError("Поле 'Дата' не может быть пустым")
-            try:
-                date = datetime.strptime(date_str, "%Y-%m-%d")
-            except ValueError:
-                raise ValueError("Неверный формат даты. Используйте ГГГГ-ММ-ДД")
+            response = requests.get(f"https://api.github.com/users/{username}")
+            if response.status_code == 200:
+                user_data = response.json()
+                self.display_search_result(user_data)
+            else:
+                messagebox.showerror("Ошибка", f"Пользователь '{username}' не найден!")
+        except requests.exceptions.RequestException as e:
+            messagebox.showerror("Ошибка сети", f"Не удалось подключиться к GitHub API: {e}")
 
-            # Валидация температуры
-            temp_str = self.temp_entry.get().strip()
-            if not temp_str:
-                raise ValueError("Поле 'Температура' не может быть пустым")
-            temperature = float(temp_str)
+    def display_search_result(self, user_data):
+        for item in self.results_tree.get_children():
+            self.results_tree.delete(item)
 
-            # Валидация описания
-            description = self.desc_entry.get().strip()
-            if not description:
-                raise ValueError("Поле 'Описание' не может быть пустым")
+        name = user_data.get("name", "Не указано")
+        username = user_data["login"]
+        public_repos = user_data["public_repos"]
 
-            # Осадки
-            rain = self.rain_var.get()
+        self.results_tree.insert("", "end", values=(username, name, public_repos))
 
-            # Добавляем запись
-            record = {
-                "date": date_str,
-                "temperature": temperature,
-                "description": description,
-                "rain": rain
-            }
-            self.records.append(record)
+    def add_to_favorites(self):
+        selection = self.results_tree.selection()
+        if not selection:
+            messagebox.showwarning("Предупреждение", "Выберите пользователя из результатов поиска!")
+            return
 
-            # Обновляем таблицу
-            self.tree.insert("", "end", values=(
-                date_str, f"{temperature}°C", description, rain
-            ))
+        item = selection[0]
+        values = self.results_tree.item(item, "values")
+        favorite = {
+            "username": values[0],
+            "name": values[1]
+        }
 
-            # Очищаем поля
-            self.date_entry.delete(0, tk.END)
-            self.temp_entry.delete(0, tk.END)
-            self.desc_entry.delete(0, tk.END)
-            self.rain_var.set("Нет")
-
-            # Сохраняем данные
-            self.save_data()
-            messagebox.showinfo("Успех", "Запись о погоде успешно добавлена!")
-        except ValueError as e:
-            messagebox.showerror("Ошибка ввода", str(e))
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Произошла непредвиденная ошибка: {str(e)}")
-
-    def save_data(self):
-        with open("weather_records.json", "w", encoding="utf-8") as f:
-            json.dump(self.records, f, ensure_ascii=False, indent=4)
-
-    def load_data(self):
-        if os.path.exists("weather_records.json"):
-            try:
-                with open("weather_records.json", "r", encoding="utf-8") as f:
-                    self.records = json.load(f)
-                # Заполняем таблицу при загрузке
-                for record in self.records:
-                    self.tree.insert(
-                "", "end",
-                values=(
-                    record["date"],
-            f"{record['temperature']}°C",
-            record["description"],
-            record["rain"]
-        ))
-            except (json.JSONDecodeError, IOError) as e:
-                print(f"Предупреждение: не удалось загрузить данные: {e}")
+        if favorite not in self.favorites:
+            self.favorites.append(favorite)
+            self.update_favorites_table()
+            messagebox.showinfo("Успех", f"{values[0]} добавлен в избранное!")
         else:
-            self.records = []
+            messagebox.showinfo("Информация", f"{values[0]} уже в избранном!")
 
-    def apply_filter(self):
-        filtered = self.records
+    def update_favorites_table(self):
+        for item in self.favorites_tree.get_children():
+            self.favorites_tree.delete(item)
+        for fav in self.favorites:
+            self.favorites_tree.insert("", "end", values=(fav["username"], fav["name"]))
 
-        # Фильтр по дате
-        filter_date = self.filter_date.get().strip()
-        if filter_date:
-            filtered = [r for r in filtered if r["date"] == filter_date]
+    def save_favorites(self):
+        with open("favorites.json", "w", encoding="utf-8") as f:
+            json.dump(self.favorites, f, ensure_ascii=False, indent=4)
+        messagebox.showinfo("Успех", "Избранное сохранено в favorites.json")
 
-        # Фильтр по температуре
-        filter_temp_str = self.filter_temp.get().strip()
-        if filter_temp_str:
-            try:
-                filter_temp = float(filter_temp_str)
-                filtered = [r for r in filtered if r["temperature"] >= filter_temp]
-            except ValueError:
-                messagebox.showwarning("Предупреждение", "Неверный формат температуры в фильтре")
-                return
+    def load_favorites(self):
+        if os.path.exists("favorites.json"):
+            with open("favorites.json", "r", encoding="utf-8") as f:
+                self.favorites = json.load(f)
+            self.update_favorites_table()
+            messagebox.showinfo("Успех", "Избранное загружено из favorites.json")
+        else:
+            messagebox.showwarning("Предупреждение", "Файл favorites.json не найден!")
 
-        # Обновляем таблицу
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        for record in filtered:
-            self.tree.insert("", "end", values=(
-                record["date"], f"{record['temperature']}°C", record["description"], record
+    def load_favorites(self):
+        if os.path.exists("favorites.json"):
+            with open("favorites.json", "r", encoding="utf-8") as f:
+                self.favorites = json.load(f)
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = GitHubUserFinder(root)
+    root.mainloop()

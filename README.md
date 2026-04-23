@@ -1,183 +1,149 @@
-# expense-tracker
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, scrolledtext
 import json
-from datetime import datetime
+import random
 import os
 
-class TrainingPlanner:
+class QuoteGenerator:
     def __init__(self, root):
         self.root = root
-        self.root.title("Training Planner - План тренировок")
-        self.trainings = []
+        self.root.title("Random Quote Generator - Генератор случайных цитат")
+        self.quotes = self.load_predefined_quotes()
+        self.history = []
         self.create_widgets()
-        self.load_data()
+        self.load_history()
+
+    def load_predefined_quotes(self):
+        """Загружаем предопределённые цитаты"""
+        return [
+            {"text": "Жизнь — это то, что происходит с тобой, пока ты строишь другие планы.",
+             "author": "Джон Леннон", "topic": "Жизнь"},
+            {"text": "Единственный способ сделать великую работу — любить то, что ты делаешь.",
+             "author": "Стив Джобс", "topic": "Работа"},
+            {"text": "Будущее принадлежит тем, кто верит в красоту своей мечты.",
+             "author": "Элеонора Рузвельт", "topic": "Мотивация"},
+            {"text": "В середине трудности кроется возможность.",
+             "author": "Альберт Эйнштейн", "topic": "Трудности"},
+            {"text": "Успех — это способность идти от неудачи к неудаче без потери энтузиазма.",
+             "author": "Уинстон Черчилль", "topic": "Успех"}
+        ]
 
     def create_widgets(self):
-        # Форма ввода
-        input_frame = tk.Frame(self.root)
-        input_frame.pack(pady=10, padx=10, fill="x")
+        # Кнопка генерации
+        tk.Button(self.root, text="Сгенерировать цитату",
+                   command=self.generate_quote, font=("Arial", 12)).pack(pady=10)
 
-        # Дата
-        tk.Label(input_frame, text="Дата (ГГГГ-ММ-ДД):").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.date_entry = tk.Entry(input_frame, width=20)
-        self.date_entry.grid(row=0, column=1, padx=5, pady=5)
+        # Отображение цитаты
+        self.quote_display = scrolledtext.ScrolledText(
+            self.root, width=60, height=5, font=("Arial", 10))
+        self.quote_display.pack(pady=5, padx=10, fill="x")
 
-        # Тип тренировки
-        tk.Label(input_frame, text="Тип тренировки:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.type_entry = ttk.Combobox(input_frame, values=[
-            "Бег", "Плавание", "Силовая", "Йога", "Велоспорт", "Кроссфит"
-        ], width=17)
-        self.type_entry.grid(row=1, column=1, padx=5, pady=5)
+        # История цитат
+        tk.Label(self.root, text="История сгенерированных цитат:",
+                  font=("Arial", 12, "bold")).pack(anchor="w", padx=10, pady=(10, 5))
 
-        # Длительность
-        tk.Label(input_frame, text="Длительность (мин):").grid(row=2, column=0, padx=5, pady=5, sticky="w")
-        self.duration_entry = tk.Entry(input_frame, width=20)
-        self.duration_entry.grid(row=2, column=1, padx=5, pady=5)
-
-        # Кнопка добавления
-        tk.Button(input_frame, text="Добавить тренировку", command=self.add_training).grid(
-            row=3, column=0, columnspan=2, pady=10
-        )
-
-        # Таблица тренировок
-        table_frame = tk.Frame(self.root)
-        table_frame.pack(pady=10, padx=10, fill="both", expand=True)
-
-        columns = ("Дата", "Тип тренировки", "Длительность (мин)")
-        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
-        for col in columns:
-            self.tree.heading(col, text=col)
-            self.tree.column(col, width=150)
-        self.tree.pack(fill="both", expand=True)
+        self.history_list = tk.Listbox(self.root, height=10, width=70)
+        self.history_list.pack(pady=5, padx=10, fill="both", expand=True)
 
         # Фильтрация
         filter_frame = tk.Frame(self.root)
         filter_frame.pack(pady=10, padx=10, fill="x")
 
-        tk.Label(filter_frame, text="Фильтр по типу:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.filter_type = ttk.Combobox(filter_frame, values=["Все"] + [
-            "Бег", "Плавание", "Силовая", "Йога", "Велоспорт", "Кроссфит"
-        ])
-        self.filter_type.set("Все")
-        self.filter_type.grid(row=0, column=1, padx=5, pady=5)
+        tk.Label(filter_frame, text="Фильтр по автору:").grid(row=0, column=0, padx=5, sticky="w")
+        self.author_filter = ttk.Combobox(filter_frame, values=["Все"] +
+                                           list(set(q["author"] for q in self.quotes)))
+        self.author_filter.set("Все")
+        self.author_filter.grid(row=0, column=1, padx=5)
 
+        tk.Label(filter_frame, text="Фильтр по теме:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.topic_filter = ttk.Combobox(filter_frame, values=["Все"] +
+                         list(set(q["topic"] for q in self.quotes)))
+        self.topic_filter.set("Все")
+        self.topic_filter.grid(row=1, column=1, padx=5, pady=5)
 
-        tk.Label(filter_frame, text="Фильтр по дате:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.filter_date = tk.Entry(filter_frame, width=20)
-        self.filter_date.grid(row=1, column=1, padx=5, pady=5)
+        tk.Button(filter_frame, text="Применить фильтр",
+                  command=self.apply_filter).grid(row=2, column=0, pady=5)
+        tk.Button(filter_frame, text="Сбросить фильтр",
+                  command=self.reset_filter).grid(row=2, column=1, pady=5)
 
-        tk.Button(filter_frame, text="Применить фильтр", command=self.apply_filter).grid(row=2, column=0, pady=5)
-        tk.Button(filter_frame, text="Сбросить фильтр", command=self.reset_filter).grid(row=2, column=1, pady=5)
+        # Добавление новых цитат
+        add_frame = tk.Frame(self.root)
+        add_frame.pack(pady=10, padx=10, fill="x")
 
-    def add_training(self):
-        try:
-            # Валидация даты
-            date_str = self.date_entry.get().strip()
-            if not date_str:
-                raise ValueError("Поле 'Дата' не может быть пустым")
-            try:
-                date = datetime.strptime(date_str, "%Y-%m-%d")
-            except ValueError:
-                raise ValueError("Неверный формат даты. Используйте ГГГГ-ММ-ДД")
+        tk.Label(add_frame, text="Добавить новую цитату:").grid(row=0, column=0,
+                  columnspan=2, padx=5, sticky="w")
 
-            # Валидация типа тренировки
-            training_type = self.type_entry.get().strip()
-            if not training_type:
-                raise ValueError("Выберите тип тренировки")
+        tk.Label(add_frame, text="Текст:").grid(row=1, column=0, padx=5, sticky="w")
+        self.new_text = scrolledtext.ScrolledText(add_frame, width=40, height=3)
+        self.new_text.grid(row=1, column=1, padx=5, pady=2)
 
+        tk.Label(add_frame, text="Автор:").grid(row=2, column=0, padx=5, pady=2, sticky="w")
+        self.new_author = tk.Entry(add_frame, width=40)
+        self.newauthor.grid(row=2, column=1, padx=5, pady=2)
 
-            # Валидация длительности
-            duration_str = self.duration_entry.get().strip()
-            if not duration_str:
-                raise ValueError("Поле 'Длительность' не может быть пустым")
-            duration = float(duration_str)
-            if duration <= 0:
-                raise ValueError("Длительность должна быть положительным числом")
+        tk.Label(add_frame, text="Тема:").grid(row=3, column=0, padx=5, pady=2, sticky="w")
+        self.newtopic = tk.Entry(add_frame, width=40)
+        self.newtopic.grid(row=3, column=1, padx=5, pady=2)
 
-            # Добавляем запись
-            training = {
-                "date": date_str,
-                "type": training_type,
-                "duration": duration
-            }
-            self.trainings.append(training)
+        tk.Button(add_frame, text="Добавить цитату",
+                  command=self.add_new_quote).grid(row=4, column=0, columnspan=2, pady=5)
 
-            # Обновляем таблицу
-            self.tree.insert("", "end", values=(
-                date_str, training_type, f"{duration} мин"
-            ))
+    def generate_quote(self):
+        if not self.quotes:
+            messagebox.showwarning("Предупреждение", "Нет доступных цитат!")
+            return
 
-            # Очищаем поля
-            self.date_entry.delete(0, tk.END)
-            self.type_entry.set("")
-            self.duration_entry.delete(0, tk.END)
+        quote = random.choice(self.quotes)
+        display_text = f'"{quote["text"]}"\n— {quote["author"]} ({quote["topic"]})'
 
-            # Сохраняем данные
-            self.save_data()
-            messagebox.showinfo("Успех", "Тренировка успешно добавлена!")
+        self.quote_display.delete(1.0, tk.END)
+        self.quote_display.insert(1.0, display_text)
 
+        # Добавляем в историю
+        self.history.append(quote)
+        self.update_history_display()
+        self.save_history()
 
-        except ValueError as e:
-            messagebox.showerror("Ошибка ввода", str(e))
-        except Exception as e:
-            messagebox.showerror("Ошибка", f"Произошла непредвиденная ошибка: {str(e)}")
-
-    def save_data(self):
-        with open("trainings.json", "w", encoding="utf-8") as f:
-            json.dump(self.trainings, f, ensure_ascii=False, indent=4)
-
-
-    def load_data(self):
-        if os.path.exists("trainings.json"):
-            try:
-                with open("trainings.json", "r", encoding="utf-8") as f:
-                    self.trainings = json.load(f)
-                # Заполняем таблицу при загрузке
-                for training in self.trainings:
-                    self.tree.insert(
-                "", "end",
-                values=(training["date"], training["type"], f"{training['duration']} мин")
-            )
-            except (json.JSONDecodeError, IOError) as e:
-                print(f"Предупреждение: не удалось загрузить данные: {e}")
-        else:
-            self.trainings = []
-
+    def update_history_display(self):
+        self.history_list.delete(0, tk.END)
+        for i, quote in enumerate(reversed(self.history[-20:]), 1):  # Последние 20 цитат
+            display = f"{i}. {quote['author']}: {quote['text'][:50]}..."
+            self.history_list.insert(tk.END, display)
     def apply_filter(self):
-        filtered = self.trainings
+        filtered = self.history
 
-        # Фильтр по типу тренировки
-        filter_type = self.filter_type.get()
-        if filter_type != "Все":
-            filtered = [t for t in filtered if t["type"] == filter_type]
+        author_filter = self.author_filter.get()
+        topic_filter = self.topic_filter.get()
 
-        # Фильтр по дате
-        filter_date = self.filter_date.get().strip()
-        if filter_date:
-            filtered = [t for t in filtered if t["date"] == filter_date]
+        if author_filter != "Все":
+            filtered = [q for q in filtered if q["author"] == author_filter]
+        if topic_filter != "Все":
+            filtered = [q for q in filtered if q["topic"] == topic_filter]
 
-        # Обновляем таблицу
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        for training in filtered:
-            self.tree.insert(
-                "", "end",
-                values=(training["date"], training["type"], f"{training['duration']} мин")
-            )
 
+        self.history_list.delete(0, tk.END)
+        for i, quote in enumerate(filtered, 1):
+            display = f"{i}. {quote['author']}: {quote['text'][:50]}..."
+            self.history_list.insert(tk.END, display)
     def reset_filter(self):
-        # Сбрасываем фильтры
-        self.filter_type.set("Все")
-        self.filter_date.delete(0, tk.END)
-        # Показываем все записи
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        for training in self.trainings:
-            self.tree.insert(
-                "", "end",
-                values=(training["date"], training["type"], f"{training['duration']} мин")
-            )
+        self.author_filter.set("Все")
+        self.topic_filter.set("Все")
+        self.update_history_display()
+    def add_new_quote(self):
+        text = self.new_text.get(1.0, tk.END).strip()
+        author = self.newauthor.get().strip()
+        topic = self.newtopic.get().strip()
 
-def main():
-    root = tk.Tk
+        if not text or not author or not topic:
+            messagebox.showerror("Ошибка", "Все поля должны быть заполнены!")
+            return
+
+        new_quote = {"text": text, "author": author, "topic": topic}
+        self.quotes.append(new_quote)
+
+        # Обновляем фильтры
+        authors = list(set(q["author"] for q in self.quotes))
+        topics = list(set(q["topic"] for q in self.quotes))
+
+        self.author_filter["values"] = ["Все"] + authors
+        self.topic_filter["values"] = ["

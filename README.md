@@ -1,133 +1,183 @@
 # expense-tracker
 import tkinter as tk
 from tkinter import ttk, messagebox
-import requests
 import json
+from datetime import datetime
 import os
 
-class GitHubUserFinder:
+class TrainingPlanner:
     def __init__(self, root):
         self.root = root
-        self.root.title("GitHub User Finder")
-        self.favorites = []
-        self.load_favorites()
+        self.root.title("Training Planner - План тренировок")
+        self.trainings = []
+        self.create_widgets()
+        self.load_data()
 
-        # Поле поиска
-        tk.Label(root, text="Имя пользователя GitHub:").grid(row=0, column=0, sticky="w", padx=10, pady=5)
-        self.search_entry = tk.Entry(root, width=40)
-        self.search_entry.grid(row=0, column=1, padx=10, pady=5)
+    def create_widgets(self):
+        # Форма ввода
+        input_frame = tk.Frame(self.root)
+        input_frame.pack(pady=10, padx=10, fill="x")
 
-        # Кнопка поиска
-        tk.Button(root, text="Найти пользователя", command=self.search_user).grid(row=0, column=2, padx=5, pady=5)
+        # Дата
+        tk.Label(input_frame, text="Дата (ГГГГ-ММ-ДД):").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.date_entry = tk.Entry(input_frame, width=20)
+        self.date_entry.grid(row=0, column=1, padx=5, pady=5)
 
-        # Результаты поиска
-        tk.Label(root, text="Результаты поиска:").grid(row=1, column=0, sticky="w", padx=10, pady=5)
-        self.results_tree = ttk.Treeview(root, columns=("Username", "Name", "Public Repos"), show="headings", height=10)
-        self.results_tree.heading("Username", text="Пользователь")
-        self.results_tree.heading("Name", text="Имя")
-        self.results_tree.heading("Public Repos", text="Публичных репозиториев")
-        self.results_tree.column("Username", width=150)
-        self.results_tree.column("Name", width=200)
-        self.results_tree.column("Public Repos", width=120)
-        self.results_tree.grid(row=2, column=0, columnspan=3, padx=10, pady=5, sticky="nsew")
+        # Тип тренировки
+        tk.Label(input_frame, text="Тип тренировки:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.type_entry = ttk.Combobox(input_frame, values=[
+            "Бег", "Плавание", "Силовая", "Йога", "Велоспорт", "Кроссфит"
+        ], width=17)
+        self.type_entry.grid(row=1, column=1, padx=5, pady=5)
 
-        # Кнопки для избранного
-        tk.Button(root, text="Добавить в избранное", command=self.add_to_favorites).grid(row=3, column=0, padx=10, pady=10)
+        # Длительность
+        tk.Label(input_frame, text="Длительность (мин):").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.duration_entry = tk.Entry(input_frame, width=20)
+        self.duration_entry.grid(row=2, column=1, padx=5, pady=5)
 
-        # Список избранного
-        tk.Label(root, text="Избранное:").grid(row=4, column=0, sticky="w", padx=10, pady=5)
-        self.favorites_tree = ttk.Treeview(root, columns=("Username", "Name"), show="headings", height=5)
-        self.favorites_tree.heading("Username", text="Пользователь")
-        self.favorites_tree.heading("Name", text="Имя")
-        self.favorites_tree.column("Username", width=250)
-        self.favorites_tree.column("Name", width=300)
-        self.favorites_tree.grid(row=5, column=0, columnspan=3, padx=10, pady=5, sticky="nsew")
+        # Кнопка добавления
+        tk.Button(input_frame, text="Добавить тренировку", command=self.add_training).grid(
+            row=3, column=0, columnspan=2, pady=10
+        )
 
-        # Кнопки сохранения/загрузки
-        tk.Button(root, text="Сохранить избранное", command=self.save_favorites).grid(row=6, column=0, padx=10, pady=5)
-        tk.Button(root, text="Загрузить избранное", command=self.load_favorites).grid(row=6, column=1, pady=5)
+        # Таблица тренировок
+        table_frame = tk.Frame(self.root)
+        table_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
-        self.update_favorites_table()
+        columns = ("Дата", "Тип тренировки", "Длительность (мин)")
+        self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
+        for col in columns:
+            self.tree.heading(col, text=col)
+            self.tree.column(col, width=150)
+        self.tree.pack(fill="both", expand=True)
 
-    def validate_input(self):
-        username = self.search_entry.get().strip()
-        if not username:
-            messagebox.showerror("Ошибка", "Поле поиска не должно быть пустым!")
-            return False
-        return True
+        # Фильтрация
+        filter_frame = tk.Frame(self.root)
+        filter_frame.pack(pady=10, padx=10, fill="x")
 
-    def search_user(self):
-        if not self.validate_input():
-            return
+        tk.Label(filter_frame, text="Фильтр по типу:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
+        self.filter_type = ttk.Combobox(filter_frame, values=["Все"] + [
+            "Бег", "Плавание", "Силовая", "Йога", "Велоспорт", "Кроссфит"
+        ])
+        self.filter_type.set("Все")
+        self.filter_type.grid(row=0, column=1, padx=5, pady=5)
 
-        username = self.search_entry.get().strip()
 
+        tk.Label(filter_frame, text="Фильтр по дате:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.filter_date = tk.Entry(filter_frame, width=20)
+        self.filter_date.grid(row=1, column=1, padx=5, pady=5)
+
+        tk.Button(filter_frame, text="Применить фильтр", command=self.apply_filter).grid(row=2, column=0, pady=5)
+        tk.Button(filter_frame, text="Сбросить фильтр", command=self.reset_filter).grid(row=2, column=1, pady=5)
+
+    def add_training(self):
         try:
-            response = requests.get(f"https://api.github.com/users/{username}")
-            if response.status_code == 200:
-                user_data = response.json()
-                self.display_search_result(user_data)
-            else:
-                messagebox.showerror("Ошибка", f"Пользователь '{username}' не найден!")
-        except requests.exceptions.RequestException as e:
-            messagebox.showerror("Ошибка сети", f"Не удалось подключиться к GitHub API: {e}")
+            # Валидация даты
+            date_str = self.date_entry.get().strip()
+            if not date_str:
+                raise ValueError("Поле 'Дата' не может быть пустым")
+            try:
+                date = datetime.strptime(date_str, "%Y-%m-%d")
+            except ValueError:
+                raise ValueError("Неверный формат даты. Используйте ГГГГ-ММ-ДД")
 
-    def display_search_result(self, user_data):
-        for item in self.results_tree.get_children():
-            self.results_tree.delete(item)
+            # Валидация типа тренировки
+            training_type = self.type_entry.get().strip()
+            if not training_type:
+                raise ValueError("Выберите тип тренировки")
 
-        name = user_data.get("name", "Не указано")
-        username = user_data["login"]
-        public_repos = user_data["public_repos"]
 
-        self.results_tree.insert("", "end", values=(username, name, public_repos))
+            # Валидация длительности
+            duration_str = self.duration_entry.get().strip()
+            if not duration_str:
+                raise ValueError("Поле 'Длительность' не может быть пустым")
+            duration = float(duration_str)
+            if duration <= 0:
+                raise ValueError("Длительность должна быть положительным числом")
 
-    def add_to_favorites(self):
-        selection = self.results_tree.selection()
-        if not selection:
-            messagebox.showwarning("Предупреждение", "Выберите пользователя из результатов поиска!")
-            return
+            # Добавляем запись
+            training = {
+                "date": date_str,
+                "type": training_type,
+                "duration": duration
+            }
+            self.trainings.append(training)
 
-        item = selection[0]
-        values = self.results_tree.item(item, "values")
-        favorite = {
-            "username": values[0],
-            "name": values[1]
-        }
+            # Обновляем таблицу
+            self.tree.insert("", "end", values=(
+                date_str, training_type, f"{duration} мин"
+            ))
 
-        if favorite not in self.favorites:
-            self.favorites.append(favorite)
-            self.update_favorites_table()
-            messagebox.showinfo("Успех", f"{values[0]} добавлен в избранное!")
+            # Очищаем поля
+            self.date_entry.delete(0, tk.END)
+            self.type_entry.set("")
+            self.duration_entry.delete(0, tk.END)
+
+            # Сохраняем данные
+            self.save_data()
+            messagebox.showinfo("Успех", "Тренировка успешно добавлена!")
+
+
+        except ValueError as e:
+            messagebox.showerror("Ошибка ввода", str(e))
+        except Exception as e:
+            messagebox.showerror("Ошибка", f"Произошла непредвиденная ошибка: {str(e)}")
+
+    def save_data(self):
+        with open("trainings.json", "w", encoding="utf-8") as f:
+            json.dump(self.trainings, f, ensure_ascii=False, indent=4)
+
+
+    def load_data(self):
+        if os.path.exists("trainings.json"):
+            try:
+                with open("trainings.json", "r", encoding="utf-8") as f:
+                    self.trainings = json.load(f)
+                # Заполняем таблицу при загрузке
+                for training in self.trainings:
+                    self.tree.insert(
+                "", "end",
+                values=(training["date"], training["type"], f"{training['duration']} мин")
+            )
+            except (json.JSONDecodeError, IOError) as e:
+                print(f"Предупреждение: не удалось загрузить данные: {e}")
         else:
-            messagebox.showinfo("Информация", f"{values[0]} уже в избранном!")
+            self.trainings = []
 
-    def update_favorites_table(self):
-        for item in self.favorites_tree.get_children():
-            self.favorites_tree.delete(item)
-        for fav in self.favorites:
-            self.favorites_tree.insert("", "end", values=(fav["username"], fav["name"]))
+    def apply_filter(self):
+        filtered = self.trainings
 
-    def save_favorites(self):
-        with open("favorites.json", "w", encoding="utf-8") as f:
-            json.dump(self.favorites, f, ensure_ascii=False, indent=4)
-        messagebox.showinfo("Успех", "Избранное сохранено в favorites.json")
+        # Фильтр по типу тренировки
+        filter_type = self.filter_type.get()
+        if filter_type != "Все":
+            filtered = [t for t in filtered if t["type"] == filter_type]
 
-    def load_favorites(self):
-        if os.path.exists("favorites.json"):
-            with open("favorites.json", "r", encoding="utf-8") as f:
-                self.favorites = json.load(f)
-            self.update_favorites_table()
-            messagebox.showinfo("Успех", "Избранное загружено из favorites.json")
-        else:
-            messagebox.showwarning("Предупреждение", "Файл favorites.json не найден!")
+        # Фильтр по дате
+        filter_date = self.filter_date.get().strip()
+        if filter_date:
+            filtered = [t for t in filtered if t["date"] == filter_date]
 
-    def load_favorites(self):
-        if os.path.exists("favorites.json"):
-            with open("favorites.json", "r", encoding="utf-8") as f:
-                self.favorites = json.load(f)
+        # Обновляем таблицу
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        for training in filtered:
+            self.tree.insert(
+                "", "end",
+                values=(training["date"], training["type"], f"{training['duration']} мин")
+            )
 
-if __name__ == "__main__":
-    root = tk.Tk()
-    app = GitHubUserFinder(root)
-    root.mainloop()
+    def reset_filter(self):
+        # Сбрасываем фильтры
+        self.filter_type.set("Все")
+        self.filter_date.delete(0, tk.END)
+        # Показываем все записи
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        for training in self.trainings:
+            self.tree.insert(
+                "", "end",
+                values=(training["date"], training["type"], f"{training['duration']} мин")
+            )
+
+def main():
+    root = tk.Tk

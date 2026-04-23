@@ -5,12 +5,13 @@ import json
 from datetime import datetime
 import os
 
-class TrainingPlanner:
+class WeatherDiary:
     def __init__(self, root):
         self.root = root
-        self.root.title("Training Planner - План тренировок")
-        self.trainings = []
+        self.root.title("Weather Diary - Дневник погоды")
+        self.records = []
         self.create_widgets()
+        # Загружаем данные после создания всех виджетов
         self.load_data()
 
     def create_widgets(self):
@@ -23,53 +24,54 @@ class TrainingPlanner:
         self.date_entry = tk.Entry(input_frame, width=20)
         self.date_entry.grid(row=0, column=1, padx=5, pady=5)
 
-        # Тип тренировки
-        tk.Label(input_frame, text="Тип тренировки:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
-        self.type_entry = ttk.Combobox(input_frame, values=[
-            "Бег", "Плавание", "Силовая", "Йога", "Велоспорт", "Кроссфит"
-        ], width=17)
-        self.type_entry.grid(row=1, column=1, padx=5, pady=5)
+        # Температура
+        tk.Label(input_frame, text="Температура (°C):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.temp_entry = tk.Entry(input_frame, width=20)
+        self.temp_entry.grid(row=1, column=1, padx=5, pady=5)
 
-        # Длительность
-        tk.Label(input_frame, text="Длительность (мин):").grid(row=2, column=0, padx=5, pady=5, sticky="w")
-        self.duration_entry = tk.Entry(input_frame, width=20)
-        self.duration_entry.grid(row=2, column=1, padx=5, pady=5)
+        # Описание погоды
+        tk.Label(input_frame, text="Описание погоды:").grid(row=2, column=0, padx=5, pady=5, sticky="w")
+        self.desc_entry = tk.Entry(input_frame, width=20)
+        self.desc_entry.grid(row=2, column=1, padx=5, pady=5)
+
+        # Осадки
+        tk.Label(input_frame, text="Осадки:").grid(row=3, column=0, padx=5, pady=5, sticky="w")
+        self.rain_var = tk.StringVar(value="Нет")
+        tk.Radiobutton(input_frame, text="Да", variable=self.rain_var, value="Да").grid(row=3, column=1, sticky="w")
+        tk.Radiobutton(input_frame, text="Нет", variable=self.rain_var, value="Нет").grid(row=3, column=2, sticky="w")
 
         # Кнопка добавления
-        tk.Button(input_frame, text="Добавить тренировку", command=self.add_training).grid(
-            row=3, column=0, columnspan=2, pady=10
+        tk.Button(input_frame, text="Добавить запись", command=self.add_record).grid(
+            row=4, column=0, columnspan=3, pady=10
         )
 
-        # Таблица тренировок
+        # Таблица записей
         table_frame = tk.Frame(self.root)
         table_frame.pack(pady=10, padx=10, fill="both", expand=True)
 
-        columns = ("Дата", "Тип тренировки", "Длительность (мин)")
+        columns = ("Дата", "Температура (°C)", "Описание", "Осадки")
         self.tree = ttk.Treeview(table_frame, columns=columns, show="headings", height=10)
         for col in columns:
             self.tree.heading(col, text=col)
-            self.tree.column(col, width=150)
+            self.tree.column(col, width=120)
         self.tree.pack(fill="both", expand=True)
 
         # Фильтрация
         filter_frame = tk.Frame(self.root)
         filter_frame.pack(pady=10, padx=10, fill="x")
 
-        tk.Label(filter_frame, text="Фильтр по типу:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
-        self.filter_type = ttk.Combobox(filter_frame, values=["Все"] + [
-            "Бег", "Плавание", "Силовая", "Йога", "Велоспорт", "Кроссфит"
-        ])
-        self.filter_type.set("Все")
-        self.filter_type.grid(row=0, column=1, padx=5, pady=5)
-
-        tk.Label(filter_frame, text="Фильтр по дате:").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        tk.Label(filter_frame, text="Фильтр по дате:").grid(row=0, column=0, padx=5, pady=5, sticky="w")
         self.filter_date = tk.Entry(filter_frame, width=20)
-        self.filter_date.grid(row=1, column=1, padx=5, pady=5)
+        self.filter_date.grid(row=0, column=1, padx=5, pady=5)
+
+        tk.Label(filter_frame, text="Температура выше (°C):").grid(row=1, column=0, padx=5, pady=5, sticky="w")
+        self.filter_temp = tk.Entry(filter_frame, width=20)
+        self.filter_temp.grid(row=1, column=1, padx=5, pady=5)
 
         tk.Button(filter_frame, text="Применить фильтр", command=self.apply_filter).grid(row=2, column=0, pady=5)
         tk.Button(filter_frame, text="Сбросить фильтр", command=self.reset_filter).grid(row=2, column=1, pady=5)
 
-    def add_training(self):
+    def add_record(self):
         try:
             # Валидация даты
             date_str = self.date_entry.get().strip()
@@ -80,103 +82,93 @@ class TrainingPlanner:
             except ValueError:
                 raise ValueError("Неверный формат даты. Используйте ГГГГ-ММ-ДД")
 
-            # Валидация типа тренировки
-            training_type = self.type_entry.get().strip()
-            if not training_type:
-                raise ValueError("Выберите тип тренировки")
+            # Валидация температуры
+            temp_str = self.temp_entry.get().strip()
+            if not temp_str:
+                raise ValueError("Поле 'Температура' не может быть пустым")
+            temperature = float(temp_str)
 
-            # Валидация длительности
-            duration_str = self.duration_entry.get().strip()
-            if not duration_str:
-                raise ValueError("Поле 'Длительность' не может быть пустым")
-            duration = float(duration_str)
-            if duration <= 0:
-                raise ValueError("Длительность должна быть положительным числом")
+            # Валидация описания
+            description = self.desc_entry.get().strip()
+            if not description:
+                raise ValueError("Поле 'Описание' не может быть пустым")
+
+            # Осадки
+            rain = self.rain_var.get()
 
             # Добавляем запись
-            training = {
+            record = {
                 "date": date_str,
-                "type": training_type,
-                "duration": duration
+                "temperature": temperature,
+                "description": description,
+                "rain": rain
             }
-            self.trainings.append(training)
+            self.records.append(record)
 
             # Обновляем таблицу
             self.tree.insert("", "end", values=(
-                date_str, training_type, f"{duration} мин"
+                date_str, f"{temperature}°C", description, rain
             ))
 
             # Очищаем поля
             self.date_entry.delete(0, tk.END)
-            self.type_entry.set("")
-            self.duration_entry.delete(0, tk.END)
+            self.temp_entry.delete(0, tk.END)
+            self.desc_entry.delete(0, tk.END)
+            self.rain_var.set("Нет")
 
             # Сохраняем данные
             self.save_data()
-            messagebox.showinfo("Успех", "Тренировка успешно добавлена!")
-
+            messagebox.showinfo("Успех", "Запись о погоде успешно добавлена!")
         except ValueError as e:
             messagebox.showerror("Ошибка ввода", str(e))
         except Exception as e:
             messagebox.showerror("Ошибка", f"Произошла непредвиденная ошибка: {str(e)}")
 
-
     def save_data(self):
-        with open("trainings.json", "w", encoding="utf-8") as f:
-            json.dump(self.trainings, f, ensure_ascii=False, indent=4)
+        with open("weather_records.json", "w", encoding="utf-8") as f:
+            json.dump(self.records, f, ensure_ascii=False, indent=4)
 
     def load_data(self):
-        if os.path.exists("trainings.json"):
+        if os.path.exists("weather_records.json"):
             try:
-                with open("trainings.json", "r", encoding="utf-8") as f:
-                    self.trainings = json.load(f)
+                with open("weather_records.json", "r", encoding="utf-8") as f:
+                    self.records = json.load(f)
                 # Заполняем таблицу при загрузке
-                for training in self.trainings:
-                    self.tree.insert("", "end", values=(
-                training["date"],
-                training["type"],
-                f"{training['duration']} мин"
-            ))
+                for record in self.records:
+                    self.tree.insert(
+                "", "end",
+                values=(
+                    record["date"],
+            f"{record['temperature']}°C",
+            record["description"],
+            record["rain"]
+        ))
             except (json.JSONDecodeError, IOError) as e:
                 print(f"Предупреждение: не удалось загрузить данные: {e}")
         else:
-            self.trainings = []
+            self.records = []
 
     def apply_filter(self):
-        filtered = self.trainings
-
-        # Фильтр по типу тренировки
-        filter_type = self.filter_type.get()
-        if filter_type != "Все":
-            filtered = [t for t in filtered if t["type"] == filter_type]
+        filtered = self.records
 
         # Фильтр по дате
         filter_date = self.filter_date.get().strip()
         if filter_date:
-            filtered = [t for t in filtered if t["date"] == filter_date]
+            filtered = [r for r in filtered if r["date"] == filter_date]
+
+        # Фильтр по температуре
+        filter_temp_str = self.filter_temp.get().strip()
+        if filter_temp_str:
+            try:
+                filter_temp = float(filter_temp_str)
+                filtered = [r for r in filtered if r["temperature"] >= filter_temp]
+            except ValueError:
+                messagebox.showwarning("Предупреждение", "Неверный формат температуры в фильтре")
+                return
 
         # Обновляем таблицу
         for item in self.tree.get_children():
             self.tree.delete(item)
-        for training in filtered:
-            self.tree.insert(
-                "", "end",
-                values=(training["date"], training["type"], f"{training['duration']} мин")
-            )
-
-    def reset_filter(self):
-        # Сбрасываем фильтры
-        self.filter_type.set("Все")
-        self.filter_date.delete(0, tk.END)
-        # Показываем все записи
-        for item in self.tree.get_children():
-            self.tree.delete(item)
-        for training in self.trainings:
-            self.tree.insert(
-                "", "end",
-                values=(training["date"], training["type"], f"{training['duration']} мин")
-            )
-
-def main():
-    root = tk.Tk()
-    app = Training
+        for record in filtered:
+            self.tree.insert("", "end", values=(
+                record["date"], f"{record['temperature']}°C", record["description"], record
